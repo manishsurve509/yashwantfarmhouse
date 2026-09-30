@@ -4,8 +4,12 @@
  */
 export async function safeFetch(url, options = {}) {
   try {
-    const res = await fetch(url, options);
+    const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const targetUrl = url.startsWith('/') && BASE_URL ? `${BASE_URL}${url}` : url;
+
+    const res = await fetch(targetUrl, options);
     const contentType = res.headers.get('content-type') || '';
+
 
     // If response is not JSON (e.g. index.html or 404/502/504 HTML page)
     if (!contentType.includes('application/json')) {

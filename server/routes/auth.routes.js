@@ -2,6 +2,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
 import { generateToken, authMiddleware } from '../middleware/auth.js';
+import { isDBConnected } from '../config/db.js';
+import { memoryStore } from '../store/memoryStore.js';
 
 const router = express.Router();
 
@@ -18,7 +20,20 @@ router.post('/login', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const admin = await Admin.findOne({ email: normalizedEmail });
+    let admin = null;
+
+    if (isDBConnected()) {
+      try {
+        admin = await Admin.findOne({ email: normalizedEmail });
+      } catch (e) {
+        console.warn('DB findOne failed, falling back to memory store:', e.message);
+      }
+    }
+
+    // Fallback to memory store if not in DB
+    if (!admin) {
+      admin = memoryStore.getAdminByEmail(normalizedEmail);
+    }
 
     if (!admin) {
       return res.status(401).json({
@@ -37,7 +52,9 @@ router.post('/login', async (req, res) => {
 
     // Update last login
     admin.lastLogin = new Date();
-    await admin.save();
+    if (admin.save && typeof admin.save === 'function') {
+      try { await admin.save(); } catch (_) {}
+    }
 
     const token = generateToken(admin);
 
@@ -60,6 +77,7 @@ router.post('/login', async (req, res) => {
     });
   }
 });
+
 
 // GET /api/auth/me
 router.get('/me', authMiddleware, async (req, res) => {

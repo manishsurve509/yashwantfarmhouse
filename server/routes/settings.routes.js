@@ -1,16 +1,28 @@
 import express from 'express';
 import SiteSetting from '../models/SiteSetting.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { isDBConnected } from '../config/db.js';
+import { memoryStore } from '../store/memoryStore.js';
 
 const router = express.Router();
 
 // GET /api/settings - Get settings
 router.get('/', async (req, res) => {
   try {
-    let settings = await SiteSetting.findOne();
-    if (!settings) {
-      settings = await SiteSetting.create({});
+    let settings = null;
+
+    if (isDBConnected()) {
+      try {
+        settings = await SiteSetting.findOne();
+      } catch (e) {
+        console.warn('DB settings find failed, using memory store:', e.message);
+      }
     }
+
+    if (!settings) {
+      settings = memoryStore.getSettings();
+    }
+
     res.json({
       success: true,
       settings
@@ -42,34 +54,62 @@ router.put('/', authMiddleware, async (req, res) => {
       mapsEmbedUrl
     } = req.body;
 
-    let settings = await SiteSetting.findOne();
-    if (!settings) {
-      settings = new SiteSetting();
+    let dbSettings = null;
+
+    if (isDBConnected()) {
+      try {
+        dbSettings = await SiteSetting.findOne();
+        if (!dbSettings) {
+          dbSettings = new SiteSetting();
+        }
+
+        if (farmhouseName !== undefined) dbSettings.farmhouseName = farmhouseName.trim();
+        if (nameMarathi !== undefined) dbSettings.nameMarathi = nameMarathi.trim();
+        if (tagline !== undefined) dbSettings.tagline = tagline.trim();
+        if (owner !== undefined) dbSettings.owner = owner.trim();
+        if (phonePrimary !== undefined) dbSettings.phonePrimary = phonePrimary.trim();
+        if (phonePrimaryDisplay !== undefined) dbSettings.phonePrimaryDisplay = phonePrimaryDisplay.trim();
+        if (phoneSecondary !== undefined) dbSettings.phoneSecondary = phoneSecondary.trim();
+        if (phoneSecondaryDisplay !== undefined) dbSettings.phoneSecondaryDisplay = phoneSecondaryDisplay.trim();
+        if (whatsappNumber !== undefined) dbSettings.whatsappNumber = whatsappNumber.replace(/[^0-9]/g, '');
+        if (locationVillage !== undefined) dbSettings.locationVillage = locationVillage.trim();
+        if (locationCity !== undefined) dbSettings.locationCity = locationCity.trim();
+        if (locationState !== undefined) dbSettings.locationState = locationState.trim();
+        if (locationFull !== undefined) dbSettings.locationFull = locationFull.trim();
+        if (locationShort !== undefined) dbSettings.locationShort = locationShort.trim();
+        if (mapsUrl !== undefined) dbSettings.mapsUrl = mapsUrl.trim();
+        if (mapsEmbedUrl !== undefined) dbSettings.mapsEmbedUrl = mapsEmbedUrl.trim();
+
+        await dbSettings.save();
+      } catch (e) {
+        console.warn('DB settings update failed, saving to memory store:', e.message);
+      }
     }
 
-    if (farmhouseName !== undefined) settings.farmhouseName = farmhouseName.trim();
-    if (nameMarathi !== undefined) settings.nameMarathi = nameMarathi.trim();
-    if (tagline !== undefined) settings.tagline = tagline.trim();
-    if (owner !== undefined) settings.owner = owner.trim();
-    if (phonePrimary !== undefined) settings.phonePrimary = phonePrimary.trim();
-    if (phonePrimaryDisplay !== undefined) settings.phonePrimaryDisplay = phonePrimaryDisplay.trim();
-    if (phoneSecondary !== undefined) settings.phoneSecondary = phoneSecondary.trim();
-    if (phoneSecondaryDisplay !== undefined) settings.phoneSecondaryDisplay = phoneSecondaryDisplay.trim();
-    if (whatsappNumber !== undefined) settings.whatsappNumber = whatsappNumber.replace(/[^0-9]/g, '');
-    if (locationVillage !== undefined) settings.locationVillage = locationVillage.trim();
-    if (locationCity !== undefined) settings.locationCity = locationCity.trim();
-    if (locationState !== undefined) settings.locationState = locationState.trim();
-    if (locationFull !== undefined) settings.locationFull = locationFull.trim();
-    if (locationShort !== undefined) settings.locationShort = locationShort.trim();
-    if (mapsUrl !== undefined) settings.mapsUrl = mapsUrl.trim();
-    if (mapsEmbedUrl !== undefined) settings.mapsEmbedUrl = mapsEmbedUrl.trim();
-
-    await settings.save();
+    // Always update memory store
+    const updatedMem = memoryStore.updateSettings({
+      ...(farmhouseName !== undefined && { farmhouseName: farmhouseName.trim() }),
+      ...(nameMarathi !== undefined && { nameMarathi: nameMarathi.trim() }),
+      ...(tagline !== undefined && { tagline: tagline.trim() }),
+      ...(owner !== undefined && { owner: owner.trim() }),
+      ...(phonePrimary !== undefined && { phonePrimary: phonePrimary.trim() }),
+      ...(phonePrimaryDisplay !== undefined && { phonePrimaryDisplay: phonePrimaryDisplay.trim() }),
+      ...(phoneSecondary !== undefined && { phoneSecondary: phoneSecondary.trim() }),
+      ...(phoneSecondaryDisplay !== undefined && { phoneSecondaryDisplay: phoneSecondaryDisplay.trim() }),
+      ...(whatsappNumber !== undefined && { whatsappNumber: whatsappNumber.replace(/[^0-9]/g, '') }),
+      ...(locationVillage !== undefined && { locationVillage: locationVillage.trim() }),
+      ...(locationCity !== undefined && { locationCity: locationCity.trim() }),
+      ...(locationState !== undefined && { locationState: locationState.trim() }),
+      ...(locationFull !== undefined && { locationFull: locationFull.trim() }),
+      ...(locationShort !== undefined && { locationShort: locationShort.trim() }),
+      ...(mapsUrl !== undefined && { mapsUrl: mapsUrl.trim() }),
+      ...(mapsEmbedUrl !== undefined && { mapsEmbedUrl: mapsEmbedUrl.trim() })
+    });
 
     res.json({
       success: true,
       message: 'Farmhouse settings updated successfully.',
-      settings
+      settings: dbSettings || updatedMem
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -77,3 +117,4 @@ router.put('/', authMiddleware, async (req, res) => {
 });
 
 export default router;
+

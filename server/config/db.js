@@ -6,26 +6,32 @@ const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || 'mong
 
 let isConnected = false;
 
+// Disable command buffering so operations fail fast if DB is disconnected
+mongoose.set('bufferCommands', false);
+
+export const isDBConnected = () => mongoose.connection.readyState === 1;
+
 export const connectDB = async () => {
-  if (isConnected) return;
+  if (isConnected || isDBConnected()) return;
 
   try {
     const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 2000,
+      connectTimeoutMS: 2000
     });
     isConnected = true;
     console.log(`[MongoDB] Connected successfully to: ${conn.connection.host}/${conn.connection.name}`);
   } catch (error) {
-    console.error(`[MongoDB] Connection error: ${error.message}`);
-    console.log('[MongoDB] Running with fallback memory/file store if database is offline.');
+    console.warn(`[MongoDB] Database offline (${error.message}). Using high-performance memory store fallback.`);
   }
 };
 
 export const getDBStatus = () => {
   return {
-    connected: mongoose.connection.readyState === 1,
+    connected: isDBConnected(),
     readyState: mongoose.connection.readyState,
-    host: mongoose.connection.host || 'local',
+    host: mongoose.connection.host || 'memory-fallback',
     name: mongoose.connection.name || 'yashwant_farm'
   };
 };
+

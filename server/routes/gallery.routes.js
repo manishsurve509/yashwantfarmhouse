@@ -51,13 +51,26 @@ const upload = multer({
   fileFilter
 });
 
+import { isDBConnected } from '../config/db.js';
+import { memoryStore } from '../store/memoryStore.js';
+
 // GET /api/gallery - All photos
 router.get('/', async (req, res) => {
   try {
-    const photos = await Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 });
+    if (isDBConnected()) {
+      try {
+        const photos = await Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 });
+        if (photos && photos.length > 0) {
+          return res.json({ success: true, photos });
+        }
+      } catch (e) {
+        console.warn('DB gallery find failed, using memory store:', e.message);
+      }
+    }
+
     res.json({
       success: true,
-      photos
+      photos: memoryStore.getGallery()
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -94,13 +107,28 @@ router.post('/upload', authMiddleware, (req, res) => {
       const createdPhotos = [];
 
       for (const file of files) {
-        const photo = await Gallery.create({
+        const photoData = {
           imageUrl: `/uploads/${file.filename}`,
           imageName: file.originalname,
           altText: altText || file.originalname.replace(/[-_.]+/g, ' '),
           category: category || 'Property',
           featured: false
-        });
+        };
+
+        let photo = null;
+
+        if (isDBConnected()) {
+          try {
+            photo = await Gallery.create(photoData);
+          } catch (e) {
+            console.warn('DB gallery create failed, saving to memory store:', e.message);
+          }
+        }
+
+        if (!photo) {
+          photo = memoryStore.addGalleryPhoto(photoData);
+        }
+
         createdPhotos.push(photo);
       }
 
@@ -124,13 +152,27 @@ router.post('/add-url', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Image URL is required.' });
     }
 
-    const photo = await Gallery.create({
+    const photoData = {
       imageUrl: imageUrl.trim(),
       imageName: imageName || 'Farmhouse Photo',
       altText: altText || 'Yashwant Farmhouse, Nandwal',
       category: category || 'Property',
       featured: Boolean(featured)
-    });
+    };
+
+    let photo = null;
+
+    if (isDBConnected()) {
+      try {
+        photo = await Gallery.create(photoData);
+      } catch (e) {
+        console.warn('DB photo create failed:', e.message);
+      }
+    }
+
+    if (!photo) {
+      photo = memoryStore.addGalleryPhoto(photoData);
+    }
 
     res.status(201).json({
       success: true,
@@ -145,13 +187,27 @@ router.post('/add-url', authMiddleware, async (req, res) => {
 // PUT /api/gallery/:id/feature - Toggle featured status
 router.put('/:id/feature', authMiddleware, async (req, res) => {
   try {
-    const photo = await Gallery.findById(req.params.id);
+    let photo = null;
+
+    if (isDBConnected()) {
+      try {
+        photo = await Gallery.findById(req.params.id);
+        if (photo) {
+          photo.featured = !photo.featured;
+          await photo.save();
+        }
+      } catch (e) {
+        console.warn('DB photo feature toggle failed:', e.message);
+      }
+    }
+
+    if (!photo) {
+      photo = memoryStore.toggleFeatured(req.params.id);
+    }
+
     if (!photo) {
       return res.status(404).json({ success: false, message: 'Photo not found.' });
     }
-
-    photo.featured = !photo.featured;
-    await photo.save();
 
     res.json({
       success: true,
@@ -166,24 +222,32 @@ router.put('/:id/feature', authMiddleware, async (req, res) => {
 // DELETE /api/gallery/:id - Delete photo
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const photo = await Gallery.findById(req.params.id);
-    if (!photo) {
-      return res.status(404).json({ success: false, message: 'Photo not found.' });
-    }
+    let photo = null;
 
-    // If it's a local upload, clean up the disk file safely
-    if (photo.imageUrl.startsWith('/uploads/')) {
-      const filePath = path.join(uploadDir, path.basename(photo.imageUrl));
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (e) {
-          console.warn('Could not remove file on disk:', e.message);
+    if (isDBConnected()) {
+      try {
+        photo = await Gallery.findById(req.params.id);
+        if (photo) {
+          if (photo.imageUrl.startsWith('/uploads/')) {
+            const filePath = path.join(uploadDir, path.basename(photo.imageUrl));
+            if (fs.existsSync(filePath)) {
+              try { fs.unlinkSync(filePath); } catch (_) {}
+            }
+          }
+          await Gallery.findByIdAndDelete(req.params.id);
         }
+      } catch (e) {
+        console.warn('DB photo delete failed:', e.message);
       }
     }
 
-    await Gallery.findByIdAndDelete(req.params.id);
+    if (!photo) {
+      photo = memoryStore.deleteGalleryPhoto(req.params.id);
+    }
+
+    if (!photo) {
+      return res.status(404).json({ success: false, message: 'Photo not found.' });
+    }
 
     res.json({
       success: true,
@@ -195,3 +259,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 export default router;
+

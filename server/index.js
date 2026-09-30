@@ -47,8 +47,10 @@ if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
 }
 
-// Health & Status endpoint
-app.get('/api/health', (req, res) => {
+// API Router
+const apiRouter = express.Router();
+
+apiRouter.get('/health', (req, res) => {
   res.json({
     status: 'online',
     service: 'Yashwant Farm API',
@@ -58,40 +60,17 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/public', publicRoutes);
-app.use('/api/prices', pricesRoutes);
-app.use('/api/availability', availabilityRoutes);
-app.use('/api/gallery', galleryRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/enquiries', enquiriesRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/public', publicRoutes);
+apiRouter.use('/prices', pricesRoutes);
+apiRouter.use('/availability', availabilityRoutes);
+apiRouter.use('/gallery', galleryRoutes);
+apiRouter.use('/settings', settingsRoutes);
+apiRouter.use('/enquiries', enquiriesRoutes);
 
-// Catch-all for API 404
-app.use('/api/*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `API endpoint ${req.originalUrl} not found.`
-  });
-});
-
-// SPA catch-all fallback for client-side routing
-app.get('*', (req, res) => {
-  if (fs.existsSync(path.join(distDir, 'index.html'))) {
-    res.sendFile(path.join(distDir, 'index.html'));
-  } else {
-    res.status(404).send('Frontend not built. Please run "npm run build" or start Vite dev server.');
-  }
-});
-
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('[Server Error]', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error'
-  });
-});
+// Mount API router across direct, proxied, and Netlify function routes
+app.use('/api', apiRouter);
+app.use('/.netlify/functions/api', apiRouter);
 
 // Start Server and Connect DB
 const startServer = async () => {
@@ -99,13 +78,16 @@ const startServer = async () => {
     await connectDB();
     await seedData();
 
-    app.listen(PORT, () => {
-      console.log(`===============================================`);
-      console.log(`  🌾 Yashwant Farm Backend Server Running      `);
-      console.log(`  🚀 Port: http://localhost:${PORT}             `);
-      console.log(`  🌿 Health: http://localhost:${PORT}/api/health`);
-      console.log(`===============================================`);
-    });
+    // Only start HTTP listener if not running in serverless Lambda/Netlify environment
+    if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME && process.env.NODE_ENV !== 'test') {
+      app.listen(PORT, () => {
+        console.log(`===============================================`);
+        console.log(`  🌾 Yashwant Farm Backend Server Running      `);
+        console.log(`  🚀 Port: http://localhost:${PORT}             `);
+        console.log(`  🌿 Health: http://localhost:${PORT}/api/health`);
+        console.log(`===============================================`);
+      });
+    }
   } catch (error) {
     console.error('Fatal error starting server:', error);
   }
@@ -114,3 +96,4 @@ const startServer = async () => {
 startServer();
 
 export default app;
+
