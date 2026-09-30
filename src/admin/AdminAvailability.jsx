@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteData } from '../context/SiteContext';
+import { safeFetch } from '../utils/api';
 
 export default function AdminAvailability() {
   const { token } = useAuth();
@@ -79,7 +80,7 @@ export default function AdminAvailability() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/availability', {
+      const res = await safeFetch('/api/availability', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,9 +94,8 @@ export default function AdminAvailability() {
         })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to save date status');
+      if (!res.ok || !res.data?.success) {
+        throw new Error(res.error || res.data?.message || 'Failed to save date status');
       }
 
       await refreshData();
@@ -111,15 +111,14 @@ export default function AdminAvailability() {
   const handleResetDate = async (dateKey) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/availability/${dateKey}`, {
+      const res = await safeFetch(`/api/availability/${dateKey}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(res.error || res.data?.message || 'Failed to reset date');
 
       await refreshData();
       if (selectedDate === dateKey) {
@@ -158,7 +157,7 @@ export default function AdminAvailability() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/availability/batch', {
+      const res = await safeFetch('/api/availability/batch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -171,8 +170,7 @@ export default function AdminAvailability() {
         })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message);
+      if (!res.ok || !res.data?.success) throw new Error(res.error || res.data?.message || 'Failed batch update');
 
       await refreshData();
       showToast(`Updated ${datesList.length} dates to ${batchStatus}!`);

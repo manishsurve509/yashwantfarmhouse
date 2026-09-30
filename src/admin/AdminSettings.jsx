@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteData } from '../context/SiteContext';
+import { safeFetch } from '../utils/api';
 
 export default function AdminSettings() {
   const { token } = useAuth();
@@ -77,7 +78,7 @@ export default function AdminSettings() {
     setErrorMessage('');
 
     try {
-      const res = await fetch('/api/settings', {
+      const res = await safeFetch('/api/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -86,9 +87,8 @@ export default function AdminSettings() {
         body: JSON.stringify(form)
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to update settings');
+      if (!res.ok || !res.data?.success) {
+        throw new Error(res.error || res.data?.message || 'Failed to update settings');
       }
 
       await refreshData();

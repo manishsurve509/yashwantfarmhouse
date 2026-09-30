@@ -12,6 +12,7 @@ import {
   Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { safeFetch } from '../utils/api';
 
 export default function AdminEnquiries() {
   const { token } = useAuth();
@@ -22,12 +23,11 @@ export default function AdminEnquiries() {
   const fetchEnquiries = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/enquiries', {
+      const res = await safeFetch('/api/enquiries', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success && data.enquiries) {
-        setEnquiries(data.enquiries);
+      if (res.ok && res.data?.success && res.data?.enquiries) {
+        setEnquiries(res.data.enquiries);
       }
     } catch (err) {
       console.error(err);
@@ -42,7 +42,7 @@ export default function AdminEnquiries() {
 
   const handleUpdateStatus = async (id, status) => {
     try {
-      const res = await fetch(`/api/enquiries/${id}/status`, {
+      const res = await safeFetch(`/api/enquiries/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -50,9 +50,10 @@ export default function AdminEnquiries() {
         },
         body: JSON.stringify({ status })
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         fetchEnquiries();
+      } else {
+        alert(res.error || 'Failed to update status');
       }
     } catch (err) {
       alert(err.message);
@@ -62,13 +63,14 @@ export default function AdminEnquiries() {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this customer enquiry record?')) return;
     try {
-      const res = await fetch(`/api/enquiries/${id}`, {
+      const res = await safeFetch(`/api/enquiries/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         fetchEnquiries();
+      } else {
+        alert(res.error || 'Failed to delete enquiry');
       }
     } catch (err) {
       alert(err.message);

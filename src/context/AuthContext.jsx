@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { safeFetch } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -17,17 +18,16 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        const res = await fetch('/api/auth/me', {
+        const res = await safeFetch('/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${storedToken}`
           }
         });
-        const data = await res.json();
 
-        if (res.ok && data.success) {
-          setAdmin(data.admin);
+        if (res.ok && res.data?.success) {
+          setAdmin(res.data.admin);
           setToken(storedToken);
-        } else {
+        } else if (res.status === 401 || res.status === 403) {
           logout();
         }
       } catch (err) {
@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await safeFetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -50,11 +50,11 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Login failed. Please check credentials.');
+      if (!res.ok || !res.data?.success) {
+        throw new Error(res.error || res.data?.message || 'Login failed. Please check credentials.');
       }
 
+      const data = res.data;
       localStorage.setItem('yashwant_admin_token', data.token);
       setToken(data.token);
       setAdmin(data.admin);

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteData } from '../context/SiteContext';
+import { safeFetch } from '../utils/api';
 
 export default function AdminGallery() {
   const { token } = useAuth();
@@ -101,7 +102,7 @@ export default function AdminGallery() {
     formData.append('altText', uploadCaption);
 
     try {
-      const res = await fetch('/api/gallery/upload', {
+      const res = await safeFetch('/api/gallery/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -109,15 +110,14 @@ export default function AdminGallery() {
         body: formData
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Upload failed');
+      if (!res.ok || !res.data?.success) {
+        throw new Error(res.error || res.data?.message || 'Upload failed');
       }
 
       await refreshData();
       setSelectedFiles([]);
       setUploadCaption('');
-      showToast(`Successfully uploaded ${data.photos?.length || selectedFiles.length} photo(s)!`);
+      showToast(`Successfully uploaded ${res.data.photos?.length || selectedFiles.length} photo(s)!`);
     } catch (err) {
       setErrorMessage(err.message || 'Error uploading photos.');
     } finally {
@@ -127,16 +127,17 @@ export default function AdminGallery() {
 
   const handleToggleFeature = async (id) => {
     try {
-      const res = await fetch(`/api/gallery/${id}/feature`, {
+      const res = await safeFetch(`/api/gallery/${id}/feature`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         await refreshData();
-        showToast(data.message);
+        showToast(res.data.message);
+      } else {
+        alert(res.error || 'Failed to update feature status');
       }
     } catch (err) {
       alert(err.message);
@@ -147,16 +148,17 @@ export default function AdminGallery() {
     if (!window.confirm(`Are you sure you want to delete ${name}?`)) return;
 
     try {
-      const res = await fetch(`/api/gallery/${id}`, {
+      const res = await safeFetch(`/api/gallery/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         await refreshData();
         showToast('Photo removed successfully.');
+      } else {
+        alert(res.error || 'Failed to delete photo');
       }
     } catch (err) {
       alert(err.message);

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteData } from '../context/SiteContext';
+import { safeFetch } from '../utils/api';
 
 export default function AdminPrices() {
   const { token } = useAuth();
@@ -42,13 +43,15 @@ export default function AdminPrices() {
   const fetchAllPrices = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/prices');
-      const data = await res.json();
-      if (data.success && data.prices) {
-        setPricesList(data.prices);
+      const res = await safeFetch('/api/prices');
+      if (res.ok && res.data?.success && res.data?.prices) {
+        setPricesList(res.data.prices);
+      } else if (sitePrices?.length) {
+        setPricesList(sitePrices);
       }
     } catch (err) {
       console.error(err);
+      if (sitePrices?.length) setPricesList(sitePrices);
     } finally {
       setLoading(false);
     }
@@ -117,7 +120,7 @@ export default function AdminPrices() {
       const url = editingPrice ? `/api/prices/${editingPrice._id}` : '/api/prices';
       const method = editingPrice ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -126,9 +129,8 @@ export default function AdminPrices() {
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to save price');
+      if (!res.ok || !res.data?.success) {
+        throw new Error(res.error || res.data?.message || 'Failed to save price');
       }
 
       await fetchAllPrices();
@@ -144,17 +146,18 @@ export default function AdminPrices() {
 
   const handleToggleActive = async (id) => {
     try {
-      const res = await fetch(`/api/prices/${id}/toggle`, {
+      const res = await safeFetch(`/api/prices/${id}/toggle`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         await fetchAllPrices();
         await refreshData();
-        showToast(data.message);
+        showToast(res.data.message);
+      } else {
+        alert(res.error || 'Failed to toggle price');
       }
     } catch (err) {
       alert(err.message);
@@ -165,17 +168,18 @@ export default function AdminPrices() {
     if (!window.confirm('Are you sure you want to delete this price category?')) return;
 
     try {
-      const res = await fetch(`/api/prices/${id}`, {
+      const res = await safeFetch(`/api/prices/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.ok && res.data?.success) {
         await fetchAllPrices();
         await refreshData();
         showToast('Price category deleted.');
+      } else {
+        alert(res.error || 'Failed to delete price');
       }
     } catch (err) {
       alert(err.message);
