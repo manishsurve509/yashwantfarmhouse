@@ -8,3 +8,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 uploads/temp-*
+check_git.js
+push_to_github.js
+test_all.js
+
