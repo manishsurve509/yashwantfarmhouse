@@ -70,7 +70,18 @@ apiRouter.use('/enquiries', enquiriesRoutes);
 app.use('/api', apiRouter);
 app.use('/.netlify/functions/api', apiRouter);
 
+// SPA catch-all fallback for client-side routing
+app.get('*', (req, res) => {
+  const indexPath = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Frontend not built. Please run "npm run build" or start Vite dev server.');
+  }
+});
+
 // Start Server and Connect DB
+
 const startServer = async () => {
   try {
     await connectDB();
