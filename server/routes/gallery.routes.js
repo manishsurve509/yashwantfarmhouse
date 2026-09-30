@@ -2,20 +2,24 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import Gallery from '../models/Gallery.js';
 import { authMiddleware } from '../middleware/auth.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const router = express.Router();
 
-// Upload directory setup in public/uploads
-const uploadDir = path.join(__dirname, '..', '..', 'public', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Upload directory setup (use /tmp in Lambda/Netlify serverless)
+const uploadDir = (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME)
+  ? path.join('/tmp', 'uploads')
+  : path.resolve(process.cwd(), 'public', 'uploads');
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not initialize uploadDir:', e.message);
 }
+
 
 // Multer Storage Configuration
 const storage = multer.diskStorage({
