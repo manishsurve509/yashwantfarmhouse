@@ -2,7 +2,7 @@ import express from 'express';
 import SiteSetting from '../models/SiteSetting.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isDBConnected } from '../config/db.js';
-import { memoryStore } from '../store/memoryStore.js';
+import { persistentStore } from '../store/memoryStore.js';
 
 const router = express.Router();
 
@@ -14,13 +14,20 @@ router.get('/', async (req, res) => {
     if (isDBConnected()) {
       try {
         settings = await SiteSetting.findOne();
+        if (settings) {
+          persistentStore.data.settings = {
+            ...settings.toObject(),
+            _id: settings._id.toString()
+          };
+          persistentStore.save();
+        }
       } catch (e) {
-        console.warn('DB settings find failed, using memory store:', e.message);
+        console.warn('[Settings API] DB settings find failed, using persistent store:', e.message);
       }
     }
 
     if (!settings) {
-      settings = memoryStore.getSettings();
+      settings = persistentStore.getSettings();
     }
 
     res.json({
@@ -32,7 +39,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/settings - Update settings
+// PUT /api/settings - Update settings (Permanent Persistence)
 router.put('/', authMiddleware, async (req, res) => {
   try {
     const {
@@ -54,40 +61,7 @@ router.put('/', authMiddleware, async (req, res) => {
       mapsEmbedUrl
     } = req.body;
 
-    let dbSettings = null;
-
-    if (isDBConnected()) {
-      try {
-        dbSettings = await SiteSetting.findOne();
-        if (!dbSettings) {
-          dbSettings = new SiteSetting();
-        }
-
-        if (farmhouseName !== undefined) dbSettings.farmhouseName = farmhouseName.trim();
-        if (nameMarathi !== undefined) dbSettings.nameMarathi = nameMarathi.trim();
-        if (tagline !== undefined) dbSettings.tagline = tagline.trim();
-        if (owner !== undefined) dbSettings.owner = owner.trim();
-        if (phonePrimary !== undefined) dbSettings.phonePrimary = phonePrimary.trim();
-        if (phonePrimaryDisplay !== undefined) dbSettings.phonePrimaryDisplay = phonePrimaryDisplay.trim();
-        if (phoneSecondary !== undefined) dbSettings.phoneSecondary = phoneSecondary.trim();
-        if (phoneSecondaryDisplay !== undefined) dbSettings.phoneSecondaryDisplay = phoneSecondaryDisplay.trim();
-        if (whatsappNumber !== undefined) dbSettings.whatsappNumber = whatsappNumber.replace(/[^0-9]/g, '');
-        if (locationVillage !== undefined) dbSettings.locationVillage = locationVillage.trim();
-        if (locationCity !== undefined) dbSettings.locationCity = locationCity.trim();
-        if (locationState !== undefined) dbSettings.locationState = locationState.trim();
-        if (locationFull !== undefined) dbSettings.locationFull = locationFull.trim();
-        if (locationShort !== undefined) dbSettings.locationShort = locationShort.trim();
-        if (mapsUrl !== undefined) dbSettings.mapsUrl = mapsUrl.trim();
-        if (mapsEmbedUrl !== undefined) dbSettings.mapsEmbedUrl = mapsEmbedUrl.trim();
-
-        await dbSettings.save();
-      } catch (e) {
-        console.warn('DB settings update failed, saving to memory store:', e.message);
-      }
-    }
-
-    // Always update memory store
-    const updatedMem = memoryStore.updateSettings({
+    const updateFields = {
       ...(farmhouseName !== undefined && { farmhouseName: farmhouseName.trim() }),
       ...(nameMarathi !== undefined && { nameMarathi: nameMarathi.trim() }),
       ...(tagline !== undefined && { tagline: tagline.trim() }),
@@ -103,13 +77,31 @@ router.put('/', authMiddleware, async (req, res) => {
       ...(locationFull !== undefined && { locationFull: locationFull.trim() }),
       ...(locationShort !== undefined && { locationShort: locationShort.trim() }),
       ...(mapsUrl !== undefined && { mapsUrl: mapsUrl.trim() }),
-      ...(mapsEmbedUrl !== undefined && { mapsEmbedUrl: mapsEmbedUrl.trim() })
-    });
+      ...(mapsEmbedUrl !== undefined && { mapsEmbedUrl: mapsEmbedUrl.trim() }),
+      updatedAt: new Date()
+    };
+
+    let dbSettings = null;
+
+    if (isDBConnected()) {
+      try {
+        dbSettings = await SiteSetting.findOneAndUpdate(
+          {},
+          { $set: updateFields },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      } catch (e) {
+        console.warn('[Settings API] DB settings update failed:', e.message);
+      }
+    }
+
+    // Always update persistent disk store
+    const diskSettings = persistentStore.updateSettings(updateFields);
 
     res.json({
       success: true,
-      message: 'Farmhouse settings updated successfully.',
-      settings: dbSettings || updatedMem
+      message: 'Farmhouse settings saved permanently to database.',
+      settings: dbSettings || diskSettings
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -117,4 +109,3 @@ router.put('/', authMiddleware, async (req, res) => {
 });
 
 export default router;
-

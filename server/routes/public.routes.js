@@ -5,11 +5,11 @@ import Availability from '../models/Availability.js';
 import Gallery from '../models/Gallery.js';
 import Enquiry from '../models/Enquiry.js';
 import { isDBConnected } from '../config/db.js';
-import { memoryStore } from '../store/memoryStore.js';
+import { persistentStore } from '../store/memoryStore.js';
 
 const router = express.Router();
 
-// GET /api/public/data - All dynamic content for the public website
+// GET /api/public/data - Dynamic content directly from the database for the public website
 router.get('/data', async (req, res) => {
   try {
     let settings = null;
@@ -26,9 +26,9 @@ router.get('/data', async (req, res) => {
           Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 })
         ]);
 
-        settings = dbSettings;
-        prices = dbPrices;
-        gallery = dbGallery;
+        if (dbSettings) settings = dbSettings;
+        if (dbPrices && dbPrices.length > 0) prices = dbPrices;
+        if (dbGallery && dbGallery.length > 0) gallery = dbGallery;
 
         if (dbAvailability) {
           dbAvailability.forEach(item => {
@@ -36,20 +36,21 @@ router.get('/data', async (req, res) => {
           });
         }
       } catch (dbErr) {
-        console.warn('DB read failed, falling back to memory store:', dbErr.message);
+        console.warn('[Public API] DB read failed, using persistent store:', dbErr.message);
       }
     }
 
-    // Fallbacks if DB returned empty or wasn't connected
-    if (!settings) settings = memoryStore.getSettings();
-    if (!prices || prices.length === 0) prices = memoryStore.getPrices().filter(p => p.active);
-    if (Object.keys(availabilityMap).length === 0) {
-      const memAvail = memoryStore.getAvailability();
-      Object.entries(memAvail).forEach(([d, val]) => {
+    // Fallbacks to durable persistent disk store if DB is offline or returned empty
+    if (!settings) settings = persistentStore.getSettings();
+    if (!prices || prices.length === 0) prices = persistentStore.getPrices().filter(p => p.active !== false);
+    if (!gallery || gallery.length === 0) gallery = persistentStore.getGallery();
+
+    if (!isDBConnected() && Object.keys(availabilityMap).length === 0) {
+      const diskAvail = persistentStore.getAvailability();
+      Object.entries(diskAvail).forEach(([d, val]) => {
         availabilityMap[d] = typeof val === 'string' ? val : val.status;
       });
     }
-    if (!gallery || gallery.length === 0) gallery = memoryStore.getGallery();
 
     res.json({
       success: true,
@@ -62,14 +63,13 @@ router.get('/data', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in /api/public/data:', error);
+    console.error('[Public API] Error in /api/public/data:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve site data'
     });
   }
 });
-
 
 // POST /api/public/enquiry - Customer submits booking enquiry
 router.post('/enquiry', async (req, res) => {
@@ -83,44 +83,39 @@ router.post('/enquiry', async (req, res) => {
       });
     }
 
+    const enquiryData = {
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email ? email.trim() : '',
+      preferredDate: date || '',
+      guests: guests || '1-5',
+      message: message ? message.trim() : '',
+      status: 'new'
+    };
+
     let enquiryId = null;
 
     if (isDBConnected()) {
       try {
-        const enquiry = await Enquiry.create({
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email ? email.trim() : '',
-          preferredDate: date || '',
-          guests: guests || '1-5',
-          message: message ? message.trim() : '',
-          status: 'new'
-        });
+        const enquiry = await Enquiry.create(enquiryData);
         enquiryId = enquiry._id;
       } catch (dbErr) {
-        console.warn('DB enquiry create failed, using memory store:', dbErr.message);
+        console.warn('[Public API] DB enquiry create failed, using persistent store:', dbErr.message);
       }
     }
 
-    if (!enquiryId) {
-      const memEnq = memoryStore.addEnquiry({
-        name: name.trim(),
-        phone: phone.trim(),
-        email: email ? email.trim() : '',
-        preferredDate: date || '',
-        guests: guests || '1-5',
-        message: message ? message.trim() : ''
-      });
-      enquiryId = memEnq._id;
-    }
+    const diskEnq = persistentStore.addEnquiry({
+      ...(enquiryId ? { _id: enquiryId.toString() } : {}),
+      ...enquiryData
+    });
 
     res.status(201).json({
       success: true,
       message: 'Enquiry submitted successfully! The farmhouse team will contact you shortly.',
-      enquiryId
+      enquiryId: enquiryId || diskEnq._id
     });
   } catch (error) {
-    console.error('Error submitting enquiry:', error);
+    console.error('[Public API] Error submitting enquiry:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to submit enquiry. Please try again or WhatsApp us directly.'
@@ -129,4 +124,3 @@ router.post('/enquiry', async (req, res) => {
 });
 
 export default router;
-

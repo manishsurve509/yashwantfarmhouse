@@ -1,10 +1,14 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Price from '../models/Price.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isDBConnected } from '../config/db.js';
-import { memoryStore } from '../store/memoryStore.js';
+import { persistentStore } from '../store/memoryStore.js';
 
 const router = express.Router();
+
+// Helper to check valid ObjectId
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // GET /api/prices - List all prices
 router.get('/', async (req, res) => {
@@ -13,16 +17,23 @@ router.get('/', async (req, res) => {
       try {
         const prices = await Price.find().sort({ order: 1, createdAt: 1 });
         if (prices && prices.length > 0) {
+          // Keep persistent store in sync
+          persistentStore.data.prices = prices.map(p => ({
+            ...p.toObject(),
+            _id: p._id.toString()
+          }));
+          persistentStore.save();
+
           return res.json({ success: true, prices });
         }
       } catch (e) {
-        console.warn('DB prices find failed, falling back to memory store:', e.message);
+        console.warn('[Prices API] DB find failed, using persistent store:', e.message);
       }
     }
 
     res.json({
       success: true,
-      prices: memoryStore.getPrices()
+      prices: persistentStore.getPrices()
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -58,34 +69,48 @@ router.post('/', authMiddleware, async (req, res) => {
       try {
         price = await Price.create(priceData);
       } catch (e) {
-        console.warn('DB price create failed:', e.message);
+        console.warn('[Prices API] DB price create failed:', e.message);
       }
     }
 
-    if (!price) {
-      price = memoryStore.addPrice(priceData);
-    }
+    // Always update persistent disk store
+    const diskPrice = persistentStore.addPrice({
+      ...(price ? { _id: price._id.toString() } : {}),
+      ...priceData
+    });
 
     res.status(201).json({
       success: true,
       message: 'Price category created successfully.',
-      price
+      price: price || diskPrice
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// PUT /api/prices/:id - Update price
+// PUT /api/prices/:id - Update price (Permanent Persistence Guaranteed)
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { title, category, amount, unit, description, badge, features, active } = req.body;
+    const priceId = req.params.id;
 
     let updated = null;
 
     if (isDBConnected()) {
       try {
-        const price = await Price.findById(req.params.id);
+        let price = null;
+        if (isValidId(priceId)) {
+          price = await Price.findById(priceId);
+        }
+
+        // Fallback: match by title if not found by id
+        if (!price && title) {
+          price = await Price.findOne({
+            title: { $regex: new RegExp(`^${title.trim()}$`, 'i') }
+          });
+        }
+
         if (price) {
           if (title !== undefined) price.title = title.trim();
           if (category !== undefined) price.category = category.trim();
@@ -97,33 +122,46 @@ router.put('/:id', authMiddleware, async (req, res) => {
           if (active !== undefined) price.active = Boolean(active);
           await price.save();
           updated = price;
+        } else {
+          // If price did not exist in DB yet, create it now!
+          updated = await Price.create({
+            title: (title || 'New Price').trim(),
+            category: (category || 'Stay').trim(),
+            amount: Number(amount) || 0,
+            unit: unit || 'per night',
+            description: description || '',
+            badge: badge || '',
+            features: Array.isArray(features) ? features : [features],
+            active: active !== undefined ? Boolean(active) : true
+          });
         }
       } catch (e) {
-        console.warn('DB price update failed:', e.message);
+        console.warn('[Prices API] DB price update failed:', e.message);
       }
     }
 
-    if (!updated) {
-      updated = memoryStore.updatePrice(req.params.id, {
-        ...(title !== undefined && { title: title.trim() }),
-        ...(category !== undefined && { category: category.trim() }),
-        ...(amount !== undefined && { amount: Number(amount) }),
-        ...(unit !== undefined && { unit }),
-        ...(description !== undefined && { description }),
-        ...(badge !== undefined && { badge }),
-        ...(features !== undefined && { features: Array.isArray(features) ? features : [features] }),
-        ...(active !== undefined && { active: Boolean(active) })
-      });
-    }
+    // Always update persistent disk store
+    const diskUpdated = persistentStore.updatePrice(priceId, {
+      ...(title !== undefined && { title: title.trim() }),
+      ...(category !== undefined && { category: category.trim() }),
+      ...(amount !== undefined && { amount: Number(amount) }),
+      ...(unit !== undefined && { unit }),
+      ...(description !== undefined && { description }),
+      ...(badge !== undefined && { badge }),
+      ...(features !== undefined && { features: Array.isArray(features) ? features : [features] }),
+      ...(active !== undefined && { active: Boolean(active) })
+    });
 
-    if (!updated) {
+    const result = updated || diskUpdated;
+
+    if (!result) {
       return res.status(404).json({ success: false, message: 'Price item not found.' });
     }
 
     res.json({
       success: true,
       message: 'Price updated successfully.',
-      price: updated
+      price: result
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -134,31 +172,33 @@ router.put('/:id', authMiddleware, async (req, res) => {
 router.patch('/:id/toggle', authMiddleware, async (req, res) => {
   try {
     let price = null;
+    const priceId = req.params.id;
 
     if (isDBConnected()) {
       try {
-        price = await Price.findById(req.params.id);
+        if (isValidId(priceId)) {
+          price = await Price.findById(priceId);
+        }
         if (price) {
           price.active = !price.active;
           await price.save();
         }
       } catch (e) {
-        console.warn('DB price toggle failed:', e.message);
+        console.warn('[Prices API] DB price toggle failed:', e.message);
       }
     }
 
-    if (!price) {
-      price = memoryStore.togglePrice(req.params.id);
-    }
+    const diskPrice = persistentStore.togglePrice(priceId);
 
-    if (!price) {
-      return res.status(404).json({ success: false, message: 'Price item not found.' });
+    const result = price || diskPrice;
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Price category not found.' });
     }
 
     res.json({
       success: true,
-      message: `Price marked ${price.active ? 'active' : 'inactive'}.`,
-      price
+      message: `Price "${result.title}" is now ${result.active ? 'Active' : 'Disabled'}.`,
+      price: result
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -169,21 +209,22 @@ router.patch('/:id/toggle', authMiddleware, async (req, res) => {
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     let deleted = null;
+    const priceId = req.params.id;
 
     if (isDBConnected()) {
       try {
-        deleted = await Price.findByIdAndDelete(req.params.id);
+        if (isValidId(priceId)) {
+          deleted = await Price.findByIdAndDelete(priceId);
+        }
       } catch (e) {
-        console.warn('DB price delete failed:', e.message);
+        console.warn('[Prices API] DB price delete failed:', e.message);
       }
     }
 
-    if (!deleted) {
-      deleted = memoryStore.deletePrice(req.params.id);
-    }
+    const diskDeleted = persistentStore.deletePrice(priceId);
 
-    if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Price item not found.' });
+    if (!deleted && !diskDeleted) {
+      return res.status(404).json({ success: false, message: 'Price category not found.' });
     }
 
     res.json({
@@ -196,4 +237,3 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 export default router;
-

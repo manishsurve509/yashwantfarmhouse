@@ -31,8 +31,8 @@ export default function AdminDashboard({ onNavigateTab, onNavigateWebsite }) {
   const highestPrice = activePrices.length > 0 ? Math.max(...activePrices.map(p => p.amount)) : 11000;
 
   const bookedDatesCount = Object.values(availability || {}).filter(status => status === 'booked').length;
-  const photoCount = gallery?.length || 4;
-  const featuredPhotoCount = gallery?.filter(p => p.featured)?.length || 1;
+  const photoCount = gallery ? gallery.length : 0;
+  const featuredPhotoCount = gallery ? gallery.filter(p => p.featured).length : 0;
 
   const formatCurrency = (amt) => {
     return new Intl.NumberFormat('en-IN', {

@@ -2,11 +2,11 @@ import express from 'express';
 import Availability from '../models/Availability.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isDBConnected } from '../config/db.js';
-import { memoryStore } from '../store/memoryStore.js';
+import { persistentStore } from '../store/memoryStore.js';
 
 const router = express.Router();
 
-// GET /api/availability - Get all dates or filter
+// GET /api/availability - Get all dates or filter by month/year
 router.get('/', async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -20,29 +20,42 @@ router.get('/', async (req, res) => {
         }
 
         const records = await Availability.find(query).sort({ date: 1 });
-        if (records && records.length > 0) {
-          const map = {};
-          records.forEach(r => {
-            map[r.date] = { status: r.status, notes: r.notes, guestCount: r.guestCount };
-          });
+        const map = {};
+        records.forEach(r => {
+          map[r.date] = { status: r.status, notes: r.notes || '', guestCount: r.guestCount || 0 };
+        });
 
-          return res.json({
-            success: true,
-            records,
-            map
-          });
-        }
+        // Keep persistent disk store in sync
+        records.forEach(r => {
+          persistentStore.data.availability[r.date] = {
+            status: r.status,
+            notes: r.notes || '',
+            guestCount: r.guestCount || 0,
+            updatedAt: r.updatedAt ? r.updatedAt.toISOString() : new Date().toISOString()
+          };
+        });
+        persistentStore.save();
+
+        return res.json({
+          success: true,
+          records,
+          map
+        });
       } catch (e) {
-        console.warn('DB availability find failed, using memory store:', e.message);
+        console.warn('[Availability API] DB find failed, falling back to persistent store:', e.message);
       }
     }
 
-    // Memory store fallback
-    const memAvail = memoryStore.getAvailability();
+    // Persistent disk store fallback
+    const diskAvail = persistentStore.getAvailability();
     const records = [];
     const map = {};
 
-    Object.entries(memAvail).forEach(([date, val]) => {
+    Object.entries(diskAvail).forEach(([date, val]) => {
+      if (month && year) {
+        const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+        if (!date.startsWith(monthPrefix)) return;
+      }
       const item = {
         date,
         status: typeof val === 'string' ? val : val.status,
@@ -63,8 +76,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/availability - Set or update single date status
-router.post('/', authMiddleware, async (req, res) => {
+// Handler for single date update (used for both POST and PUT)
+const handleSaveDate = async (req, res) => {
   try {
     const { date, status, notes, guestCount } = req.body;
 
@@ -75,7 +88,8 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    if (!['available', 'booked', 'unavailable'].includes(status)) {
+    const cleanStatus = status.toLowerCase().trim();
+    if (!['available', 'booked', 'unavailable'].includes(cleanStatus)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid status. Must be available, booked, or unavailable.'
@@ -89,33 +103,39 @@ router.post('/', authMiddleware, async (req, res) => {
         updated = await Availability.findOneAndUpdate(
           { date },
           {
-            status,
+            status: cleanStatus,
             notes: notes || '',
-            guestCount: guestCount || 0,
+            guestCount: Number(guestCount) || 0,
             updatedAt: new Date()
           },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
       } catch (e) {
-        console.warn('DB availability update failed:', e.message);
+        console.warn('[Availability API] DB update failed:', e.message);
       }
     }
 
-    // Always keep memoryStore in sync
-    const memRecord = memoryStore.setAvailability(date, status, notes || '', guestCount || 0);
+    // Always update persistent disk store
+    const diskRecord = persistentStore.setAvailability(date, cleanStatus, notes || '', guestCount || 0);
 
     res.json({
       success: true,
-      message: `Date ${date} marked as ${status}.`,
-      record: updated || { date, ...memRecord }
+      message: `Date ${date} marked as ${cleanStatus}. Saved permanently to database.`,
+      record: updated || { date, ...diskRecord }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
 
-// POST /api/availability/batch - Batch update dates (e.g. date range)
-router.post('/batch', authMiddleware, async (req, res) => {
+// POST /api/availability
+router.post('/', authMiddleware, handleSaveDate);
+
+// PUT /api/availability
+router.put('/', authMiddleware, handleSaveDate);
+
+// Handler for batch updates (used for both POST and PUT)
+const handleBatchSave = async (req, res) => {
   try {
     const { dates, status, notes } = req.body;
 
@@ -126,6 +146,8 @@ router.post('/batch', authMiddleware, async (req, res) => {
       });
     }
 
+    const cleanStatus = status.toLowerCase().trim();
+
     if (isDBConnected()) {
       try {
         const operations = dates.map(date => ({
@@ -133,7 +155,7 @@ router.post('/batch', authMiddleware, async (req, res) => {
             filter: { date },
             update: {
               $set: {
-                status,
+                status: cleanStatus,
                 notes: notes || '',
                 updatedAt: new Date()
               }
@@ -144,21 +166,27 @@ router.post('/batch', authMiddleware, async (req, res) => {
 
         await Availability.bulkWrite(operations);
       } catch (e) {
-        console.warn('DB availability bulkWrite failed:', e.message);
+        console.warn('[Availability API] DB bulkWrite failed:', e.message);
       }
     }
 
-    // Always keep memory store updated
-    memoryStore.batchSetAvailability(dates, status, notes || '');
+    // Always update persistent disk store
+    persistentStore.batchSetAvailability(dates, cleanStatus, notes || '');
 
     res.json({
       success: true,
-      message: `Successfully updated ${dates.length} dates to ${status}.`
+      message: `Successfully updated ${dates.length} dates to ${cleanStatus}. Saved permanently.`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
+
+// POST /api/availability/batch
+router.post('/batch', authMiddleware, handleBatchSave);
+
+// PUT /api/availability/batch
+router.put('/batch', authMiddleware, handleBatchSave);
 
 // DELETE /api/availability/:date - Clear/reset a date record
 router.delete('/:date', authMiddleware, async (req, res) => {
@@ -169,15 +197,15 @@ router.delete('/:date', authMiddleware, async (req, res) => {
       try {
         await Availability.findOneAndDelete({ date });
       } catch (e) {
-        console.warn('DB availability delete failed:', e.message);
+        console.warn('[Availability API] DB delete failed:', e.message);
       }
     }
 
-    memoryStore.deleteAvailability(date);
+    persistentStore.deleteAvailability(date);
 
     res.json({
       success: true,
-      message: `Date ${date} reset to available.`
+      message: `Date ${date} reset to available in database.`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -185,4 +213,3 @@ router.delete('/:date', authMiddleware, async (req, res) => {
 });
 
 export default router;
-

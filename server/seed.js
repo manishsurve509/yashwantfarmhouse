@@ -4,11 +4,17 @@ import SiteSetting from './models/SiteSetting.js';
 import Price from './models/Price.js';
 import Availability from './models/Availability.js';
 import Gallery from './models/Gallery.js';
-import { connectDB } from './config/db.js';
+import { connectDB, isDBConnected } from './config/db.js';
+import { persistentStore } from './store/memoryStore.js';
 
 export const seedData = async () => {
   try {
     await connectDB();
+
+    if (!isDBConnected()) {
+      console.log('[Seed] DB is not connected. Persistent store is active.');
+      return;
+    }
 
     // 1. Seed Admin
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@yashwantfarm.com').toLowerCase().trim();
@@ -31,26 +37,27 @@ export const seedData = async () => {
     }
 
     // 2. Seed Site Settings
-    const existingSettings = await SiteSetting.findOne();
+    let existingSettings = await SiteSetting.findOne();
     if (!existingSettings) {
-      await SiteSetting.create({
-        farmhouseName: 'Yashwant Farmhouse',
-        nameMarathi: 'यशवंत फार्महाऊस',
-        tagline: 'A peaceful farmhouse getaway in Nandwal, Kolhapur.',
-        owner: 'Pandurang Yashwant Patil',
-        phonePrimary: '+918010042002',
-        phonePrimaryDisplay: '80100 42002',
-        phoneSecondary: '+919975919947',
-        phoneSecondaryDisplay: '99759 19947',
-        whatsappNumber: '918010042002',
-        locationVillage: 'Nandwal',
-        locationCity: 'Kolhapur',
-        locationState: 'Maharashtra',
-        locationCountry: 'India',
-        locationFull: 'Nandwal, Kolhapur, Maharashtra, India',
-        locationShort: 'Nandwal, Kolhapur',
-        mapsUrl: 'https://maps.app.goo.gl/N341yLui8hh7EGDp9?g_st=aw',
-        mapsEmbedUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3825.5!2d74.22!3d16.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bc055007e08b7b5%3A0x451566f0840fa534!2z4KSv4KS24KS14KSC4KSkIOCkq-CkvuCksOCljeCkruCkueCkvuCkiuCkuA!5e0!3m2!1sen!2sin!4v1695000000000'
+      const savedSettings = persistentStore.getSettings();
+      existingSettings = await SiteSetting.create({
+        farmhouseName: savedSettings.farmhouseName || 'Yashwant Farmhouse',
+        nameMarathi: savedSettings.nameMarathi || 'यशवंत फार्महाऊस',
+        tagline: savedSettings.tagline || 'A peaceful farmhouse getaway in Nandwal, Kolhapur.',
+        owner: savedSettings.owner || 'Pandurang Yashwant Patil',
+        phonePrimary: savedSettings.phonePrimary || '+918010042002',
+        phonePrimaryDisplay: savedSettings.phonePrimaryDisplay || '80100 42002',
+        phoneSecondary: savedSettings.phoneSecondary || '+919975919947',
+        phoneSecondaryDisplay: savedSettings.phoneSecondaryDisplay || '99759 19947',
+        whatsappNumber: savedSettings.whatsappNumber || '918010042002',
+        locationVillage: savedSettings.locationVillage || 'Nandwal',
+        locationCity: savedSettings.locationCity || 'Kolhapur',
+        locationState: savedSettings.locationState || 'Maharashtra',
+        locationCountry: savedSettings.locationCountry || 'India',
+        locationFull: savedSettings.locationFull || 'Nandwal, Kolhapur, Maharashtra, India',
+        locationShort: savedSettings.locationShort || 'Nandwal, Kolhapur',
+        mapsUrl: savedSettings.mapsUrl || 'https://maps.app.goo.gl/N341yLui8hh7EGDp9?g_st=aw',
+        mapsEmbedUrl: savedSettings.mapsEmbedUrl || 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3825.5!2d74.22!3d16.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bc055007e08b7b5%3A0x451566f0840fa534!2z4KSv4KS24KS14KSC4KSkIOCkq-CkvuCksOCljeCkruCkueCkvuCkiuCkuA!5e0!3m2!1sen!2sin!4v1695000000000'
       });
       console.log('[Seed] Created default farmhouse settings.');
     }
@@ -58,7 +65,8 @@ export const seedData = async () => {
     // 3. Seed Pricing
     const priceCount = await Price.countDocuments();
     if (priceCount === 0) {
-      const defaultPrices = [
+      const diskPrices = persistentStore.getPrices();
+      const defaultPrices = diskPrices && diskPrices.length > 0 ? diskPrices.map(({ _id, ...rest }) => rest) : [
         {
           title: 'Weekday Stay',
           category: 'Monday - Thursday',
@@ -137,7 +145,8 @@ export const seedData = async () => {
     // 4. Seed Gallery Photos
     const galleryCount = await Gallery.countDocuments();
     if (galleryCount === 0) {
-      const defaultPhotos = [
+      const diskGallery = persistentStore.getGallery();
+      const defaultPhotos = diskGallery && diskGallery.length > 0 ? diskGallery.map(({ _id, ...rest }) => rest) : [
         {
           imageUrl: '/images/farmhouse-exterior-2.jpg',
           imageName: 'farmhouse-exterior-2.jpg',
@@ -176,45 +185,56 @@ export const seedData = async () => {
       console.log(`[Seed] Seeded ${defaultPhotos.length} gallery photos.`);
     }
 
-    // 5. Seed Availability for current and next 2 months
+    // 5. Seed Availability if empty
     const availabilityCount = await Availability.countDocuments();
     if (availabilityCount === 0) {
-      const today = new Date();
-      const datesToSeed = [];
+      const diskAvail = persistentStore.getAvailability();
+      const diskKeys = Object.keys(diskAvail || {});
+      if (diskKeys.length > 0) {
+        const toInsert = diskKeys.map(k => ({
+          date: k,
+          status: diskAvail[k].status || diskAvail[k],
+          notes: diskAvail[k].notes || '',
+          guestCount: diskAvail[k].guestCount || 0
+        }));
+        await Availability.insertMany(toInsert);
+        console.log(`[Seed] Restored ${toInsert.length} availability dates from persistent store.`);
+      }
+    }
 
-      for (let i = 0; i < 60; i++) {
-        const d = new Date();
-        d.setDate(today.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
-        const dayOfWeek = d.getDay(); // 0 is Sun, 6 is Sat
+    // 6. Sync DB to PersistentStore on Disk so disk backup is 100% current
+    try {
+      const allPrices = await Price.find().sort({ order: 1, createdAt: 1 }).lean();
+      if (allPrices.length > 0) {
+        persistentStore.data.prices = allPrices.map(p => ({ ...p, _id: p._id.toString() }));
+      }
 
-        // Random realistic availability: mark occasional weekends booked, some available
-        let status = 'available';
-        let notes = '';
+      const allGallery = await Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 }).lean();
+      if (allGallery.length > 0) {
+        persistentStore.data.gallery = allGallery.map(g => ({ ...g, _id: g._id.toString() }));
+      }
 
-        if (i === 2 || i === 3) {
-          status = 'booked';
-          notes = 'Family Weekend Booking';
-        } else if (i === 9 || i === 10) {
-          status = 'booked';
-          notes = 'Private Reunion Stay';
-        } else if (i === 16) {
-          status = 'booked';
-          notes = 'Reserved';
-        } else if (i === 23) {
-          status = 'unavailable';
-          notes = 'Property Maintenance';
-        }
-
-        datesToSeed.push({
-          date: dateStr,
-          status,
-          notes
+      const allAvail = await Availability.find().lean();
+      if (allAvail.length > 0) {
+        persistentStore.data.availability = {};
+        allAvail.forEach(a => {
+          persistentStore.data.availability[a.date] = {
+            status: a.status,
+            notes: a.notes || '',
+            guestCount: a.guestCount || 0
+          };
         });
       }
 
-      await Availability.insertMany(datesToSeed);
-      console.log(`[Seed] Seeded availability for next 60 days.`);
+      const dbSettings = await SiteSetting.findOne().lean();
+      if (dbSettings) {
+        persistentStore.data.settings = { ...dbSettings, _id: dbSettings._id.toString() };
+      }
+
+      persistentStore.save();
+      console.log('[Seed] Synchronized database collections to persistent disk storage.');
+    } catch (syncErr) {
+      console.warn('[Seed] Warning during initial disk sync:', syncErr.message);
     }
 
     console.log('[Seed] Database initialization complete!');
