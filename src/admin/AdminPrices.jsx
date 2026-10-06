@@ -44,14 +44,14 @@ export default function AdminPrices() {
     try {
       setLoading(true);
       const res = await safeFetch('/api/prices');
-      if (res.ok && res.data?.success && res.data?.prices) {
+      if (res.ok && res.data?.success && Array.isArray(res.data?.prices)) {
         setPricesList(res.data.prices);
-      } else if (sitePrices?.length) {
+      } else if (Array.isArray(sitePrices) && sitePrices.length > 0) {
         setPricesList(sitePrices);
       }
     } catch (err) {
       console.error(err);
-      if (sitePrices?.length) setPricesList(sitePrices);
+      if (Array.isArray(sitePrices) && sitePrices.length > 0) setPricesList(sitePrices);
     } finally {
       setLoading(false);
     }

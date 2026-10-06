@@ -26,13 +26,13 @@ export default function AdminDashboard({ onNavigateTab, onNavigateWebsite }) {
   };
 
   // Compute stat metrics
-  const activePrices = prices?.filter(p => p.active !== false) || [];
-  const lowestPrice = activePrices.length > 0 ? Math.min(...activePrices.map(p => p.amount)) : 8500;
-  const highestPrice = activePrices.length > 0 ? Math.max(...activePrices.map(p => p.amount)) : 11000;
+  const activePrices = Array.isArray(prices) ? prices.filter(p => p.active !== false) : [];
+  const lowestPrice = activePrices.length > 0 ? Math.min(...activePrices.map(p => p.amount)) : 0;
+  const highestPrice = activePrices.length > 0 ? Math.max(...activePrices.map(p => p.amount)) : 0;
 
-  const bookedDatesCount = Object.values(availability || {}).filter(status => status === 'booked').length;
-  const photoCount = gallery ? gallery.length : 0;
-  const featuredPhotoCount = gallery ? gallery.filter(p => p.featured).length : 0;
+  const bookedDatesCount = Object.values(availability || {}).filter(val => (typeof val === 'string' ? val : val?.status) === 'booked').length;
+  const photoCount = Array.isArray(gallery) ? gallery.length : 0;
+  const featuredPhotoCount = Array.isArray(gallery) ? gallery.filter(p => p.featured).length : 0;
 
   const formatCurrency = (amt) => {
     return new Intl.NumberFormat('en-IN', {

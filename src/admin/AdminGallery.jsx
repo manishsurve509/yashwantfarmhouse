@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   UploadCloud,
   Image as ImageIcon,
@@ -19,6 +19,7 @@ export default function AdminGallery() {
   const { token } = useAuth();
   const { gallery, refreshData } = useSiteData();
 
+  const [photosList, setPhotosList] = useState([]);
   const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -29,6 +30,24 @@ export default function AdminGallery() {
   // Category and caption for upload
   const [uploadCategory, setUploadCategory] = useState('Property');
   const [uploadCaption, setUploadCaption] = useState('');
+
+  const fetchPhotos = async () => {
+    try {
+      const res = await safeFetch('/api/gallery');
+      if (res.ok && res.data?.success && Array.isArray(res.data?.photos)) {
+        setPhotosList(res.data.photos);
+      } else if (Array.isArray(gallery) && gallery.length > 0) {
+        setPhotosList(gallery);
+      }
+    } catch (err) {
+      console.error(err);
+      if (Array.isArray(gallery) && gallery.length > 0) setPhotosList(gallery);
+    }
+  };
+
+  useEffect(() => {
+    fetchPhotos();
+  }, []);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -114,6 +133,7 @@ export default function AdminGallery() {
         throw new Error(res.error || res.data?.message || 'Upload failed');
       }
 
+      await fetchPhotos();
       await refreshData();
       setSelectedFiles([]);
       setUploadCaption('');
@@ -134,6 +154,7 @@ export default function AdminGallery() {
         }
       });
       if (res.ok && res.data?.success) {
+        await fetchPhotos();
         await refreshData();
         showToast(res.data.message);
       } else {
@@ -155,6 +176,7 @@ export default function AdminGallery() {
         }
       });
       if (res.ok && res.data?.success) {
+        await fetchPhotos();
         await refreshData();
         showToast('Photo removed successfully.');
       } else {
@@ -316,7 +338,7 @@ export default function AdminGallery() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#163624]">
-            Current Photos ({gallery?.length || 0})
+            Current Photos ({photosList.length > 0 ? photosList.length : (gallery?.length || 0)})
           </h2>
           <span className="text-xs text-[#796E64]">
             ⭐ Starred items appear as Featured on the homepage
@@ -324,7 +346,7 @@ export default function AdminGallery() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {(gallery || []).map((photo) => (
+          {(photosList.length > 0 ? photosList : (Array.isArray(gallery) ? gallery : [])).map((photo) => (
             <div
               key={photo._id}
               className="bg-white rounded-3xl overflow-hidden border border-[#E5DFD7] card-shadow card-shadow-hover flex flex-col justify-between"

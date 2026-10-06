@@ -41,7 +41,8 @@ export default function AvailabilityCalendar({ onSelectDate }) {
   const getDateStatus = (dateKey) => {
     // If backend has a status record for this date, return it
     if (availability && availability[dateKey]) {
-      return availability[dateKey];
+      const val = availability[dateKey];
+      return typeof val === 'string' ? val : (val.status || 'available');
     }
     // Default to available
     return 'available';

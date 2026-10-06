@@ -4,7 +4,22 @@
  */
 export async function safeFetch(url, options = {}) {
   try {
-    const BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    let BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+    // In a browser environment:
+    // If BASE_URL points to localhost/127.0.0.1 but the current client is accessing from another device/host,
+    // avoid hardcoded localhost which points to the client's own device instead of the server.
+    if (typeof window !== 'undefined' && BASE_URL) {
+      try {
+        const parsed = new URL(BASE_URL);
+        const isBaseLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+        const isClientLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isBaseLocal && !isClientLocal) {
+          BASE_URL = '';
+        }
+      } catch (_) {}
+    }
+
     const targetUrl = url.startsWith('/') && BASE_URL ? `${BASE_URL}${url}` : url;
 
     const res = await fetch(targetUrl, options);

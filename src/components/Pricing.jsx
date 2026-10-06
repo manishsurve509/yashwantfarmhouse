@@ -5,67 +5,9 @@ import { useSiteData } from '../context/SiteContext';
 export default function Pricing({ onSelectPricing }) {
   const { prices, settings } = useSiteData();
 
-  // Fallback defaults if database is still seeding
-  const defaultPrices = [
-    {
-      _id: 'default-1',
-      title: 'Weekday Stay',
-      category: 'Monday - Thursday',
-      amount: 8500,
-      unit: 'per night',
-      badge: 'Calm Retreat',
-      description: 'Peaceful countryside escape for families and friends. Enjoy full private farmhouse access.',
-      features: [
-        'Entire Private Farmhouse & Grounds',
-        'Full Swimming Pool Access',
-        'Equipped Kitchen & Cooking Facility',
-        'Accommodates up to 10 Guests',
-        'Spacious Vehicle Parking',
-        'Peaceful Natural Countryside'
-      ],
-      active: true
-    },
-    {
-      _id: 'default-2',
-      title: 'Weekend Stay',
-      category: 'Friday - Sunday',
-      amount: 11000,
-      unit: 'per night',
-      badge: 'Most Popular',
-      description: 'Prime weekend getaway. Perfect for reconnecting with family and friends.',
-      features: [
-        'Entire Private Farmhouse & Grounds',
-        'Full Swimming Pool Access',
-        'Equipped Kitchen & Cooking Facility',
-        'Accommodates up to 10 Guests',
-        'Spacious Vehicle Parking',
-        'Evening Lawn Gathering Space'
-      ],
-      active: true
-    },
-    {
-      _id: 'default-3',
-      title: 'Day Outing / Picnic',
-      category: 'Day Visit (10 AM - 6 PM)',
-      amount: 5500,
-      unit: 'day pass',
-      badge: 'Day Pass',
-      description: 'Relaxing day getaway with friends or family without overnight stay.',
-      features: [
-        'Swimming Pool Access all day',
-        'Open Lawn & Shaded Veranda',
-        'Cooking & Dining Facility',
-        'Up to 10 Visitors included',
-        'Changing Rooms & Washrooms',
-        'Secure On-site Parking'
-      ],
-      active: true
-    }
-  ];
-
-  const activePrices = (prices && prices.length > 0)
+  const activePrices = Array.isArray(prices)
     ? prices.filter(p => p.active !== false)
-    : defaultPrices;
+    : [];
 
   const handleScrollToAvailability = () => {
     const el = document.querySelector('#availability');

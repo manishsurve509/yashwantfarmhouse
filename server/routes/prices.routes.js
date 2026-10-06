@@ -16,16 +16,14 @@ router.get('/', async (req, res) => {
     if (isDBConnected()) {
       try {
         const prices = await Price.find().sort({ order: 1, createdAt: 1 });
-        if (prices && prices.length > 0) {
-          // Keep persistent store in sync
-          persistentStore.data.prices = prices.map(p => ({
-            ...p.toObject(),
-            _id: p._id.toString()
-          }));
-          persistentStore.save();
+        // Keep persistent store in sync
+        persistentStore.data.prices = prices.map(p => ({
+          ...p.toObject(),
+          _id: p._id.toString()
+        }));
+        persistentStore.save();
 
-          return res.json({ success: true, prices });
-        }
+        return res.json({ success: true, prices });
       } catch (e) {
         console.warn('[Prices API] DB find failed, using persistent store:', e.message);
       }
@@ -123,7 +121,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
           await price.save();
           updated = price;
         } else {
-          // If price did not exist in DB yet, create it now!
+          // If price did not exist in DB yet, create it once
           updated = await Price.create({
             title: (title || 'New Price').trim(),
             category: (category || 'Stay').trim(),
@@ -141,7 +139,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     }
 
     // Always update persistent disk store
-    const diskUpdated = persistentStore.updatePrice(priceId, {
+    const updatePayload = {
       ...(title !== undefined && { title: title.trim() }),
       ...(category !== undefined && { category: category.trim() }),
       ...(amount !== undefined && { amount: Number(amount) }),
@@ -150,7 +148,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
       ...(badge !== undefined && { badge }),
       ...(features !== undefined && { features: Array.isArray(features) ? features : [features] }),
       ...(active !== undefined && { active: Boolean(active) })
-    });
+    };
+
+    const diskUpdated = persistentStore.updatePrice(
+      updated ? updated._id.toString() : priceId,
+      updatePayload
+    );
 
     const result = updated || diskUpdated;
 

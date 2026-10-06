@@ -11,4 +11,5 @@ uploads/temp-*
 check_git.js
 push_to_github.js
 test_all.js
+test_persistence.js
 

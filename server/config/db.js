@@ -4,7 +4,7 @@ dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI || process.env.DATABASE_URL || 'mongodb://127.0.0.1:27017/yashwant_farm';
 
-let isConnected = false;
+let cachedPromise = null;
 
 // Disable command buffering so operations fail fast if DB is disconnected
 mongoose.set('bufferCommands', false);
@@ -12,18 +12,24 @@ mongoose.set('bufferCommands', false);
 export const isDBConnected = () => mongoose.connection.readyState === 1;
 
 export const connectDB = async () => {
-  if (isConnected || isDBConnected()) return;
+  if (isDBConnected()) return mongoose.connection;
+  if (cachedPromise) return cachedPromise;
 
-  try {
-    const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 2000,
-      connectTimeoutMS: 2000
-    });
-    isConnected = true;
+  const mongoUri = process.env.MONGODB_URI || process.env.DATABASE_URL || 'mongodb://127.0.0.1:27017/yashwant_farm';
+  const timeoutMs = process.env.MONGODB_URI ? 10000 : 2500;
+
+  cachedPromise = mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: timeoutMs,
+    connectTimeoutMS: timeoutMs
+  }).then((conn) => {
     console.log(`[MongoDB] Connected successfully to: ${conn.connection.host}/${conn.connection.name}`);
-  } catch (error) {
+    return conn;
+  }).catch((error) => {
+    cachedPromise = null;
     console.warn(`[MongoDB] Database offline (${error.message}). Using high-performance memory store fallback.`);
-  }
+  });
+
+  return cachedPromise;
 };
 
 export const getDBStatus = () => {

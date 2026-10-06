@@ -9,43 +9,7 @@ export default function Gallery() {
   const [showAll, setShowAll] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
-  // Fallback authentic images if gallery not loaded yet
-  const defaultImages = [
-    {
-      _id: 'default-1',
-      imageUrl: '/images/farmhouse-exterior-2.jpg',
-      imageName: 'farmhouse-exterior-2.jpg',
-      altText: 'Yashwant Farmhouse — full property view with swimming pool and lush greenery',
-      featured: true,
-      category: 'Property'
-    },
-    {
-      _id: 'default-2',
-      imageUrl: '/images/farmhouse-exterior-1.jpg',
-      imageName: 'farmhouse-exterior-1.jpg',
-      altText: 'Yashwant Farmhouse — red-brick cottage with traditional tiled roof and pool',
-      featured: false,
-      category: 'Property'
-    },
-    {
-      _id: 'default-3',
-      imageUrl: '/images/farmhouse-pool-view.jpg',
-      imageName: 'farmhouse-pool-view.jpg',
-      altText: 'Private swimming pool at Yashwant Farmhouse with surrounding countryside',
-      featured: false,
-      category: 'Pool'
-    },
-    {
-      _id: 'default-4',
-      imageUrl: '/images/farmhouse-logo.jpg',
-      imageName: 'farmhouse-logo.jpg',
-      altText: 'Yashwant Farmhouse branding — यशवंत फार्महाऊस Nandwal, Kolhapur',
-      featured: false,
-      category: 'Brand'
-    }
-  ];
-
-  const photosList = (gallery && gallery.length > 0) ? gallery : defaultImages;
+  const photosList = Array.isArray(gallery) ? gallery : [];
 
   // Filter photos by category
   const filteredPhotos = activeCategory === 'All'

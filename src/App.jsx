@@ -29,7 +29,7 @@ import AdminEnquiries from './admin/AdminEnquiries';
 
 export default function App() {
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const { loading: siteLoading } = useSiteData();
+  const { loading: siteLoading, refreshData } = useSiteData();
 
   // Route state: 'public' | 'admin-login' | 'admin-dashboard'
   const [currentRoute, setCurrentRoute] = useState(() => {
@@ -63,11 +63,12 @@ export default function App() {
       } else {
         setCurrentRoute('public');
       }
+      refreshData();
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [refreshData]);
 
   const navigateTo = (route, tab = 'dashboard') => {
     setCurrentRoute(route);
@@ -77,6 +78,7 @@ export default function App() {
     if (route === 'admin-dashboard') path = `/admin/${tab}`;
     window.history.pushState({}, '', path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    refreshData();
   };
 
   const handleSelectDateFromCalendar = (dateKey, status) => {

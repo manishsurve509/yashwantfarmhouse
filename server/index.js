@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 
-import { connectDB, getDBStatus } from './config/db.js';
+import { connectDB, getDBStatus, isDBConnected } from './config/db.js';
 import { seedData } from './seed.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -47,6 +47,16 @@ if (fs.existsSync(distDir)) {
 
 // API Router
 const apiRouter = express.Router();
+
+// Ensure DB connection is initialized for serverless / lambda invocations
+apiRouter.use(async (req, res, next) => {
+  if (!isDBConnected()) {
+    try {
+      await connectDB();
+    } catch (_) {}
+  }
+  next();
+});
 
 apiRouter.get('/health', (req, res) => {
   res.json({

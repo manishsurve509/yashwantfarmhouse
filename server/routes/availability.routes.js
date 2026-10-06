@@ -25,7 +25,10 @@ router.get('/', async (req, res) => {
           map[r.date] = { status: r.status, notes: r.notes || '', guestCount: r.guestCount || 0 };
         });
 
-        // Keep persistent disk store in sync
+        // Sync persistent disk store
+        if (!month && !year) {
+          persistentStore.data.availability = {};
+        }
         records.forEach(r => {
           persistentStore.data.availability[r.date] = {
             status: r.status,
@@ -59,8 +62,8 @@ router.get('/', async (req, res) => {
       const item = {
         date,
         status: typeof val === 'string' ? val : val.status,
-        notes: val.notes || '',
-        guestCount: val.guestCount || 0
+        notes: typeof val === 'object' ? (val.notes || '') : '',
+        guestCount: typeof val === 'object' ? (val.guestCount || 0) : 0
       };
       records.push(item);
       map[date] = item;
@@ -100,14 +103,24 @@ const handleSaveDate = async (req, res) => {
 
     if (isDBConnected()) {
       try {
+        const existing = await Availability.findOne({ date });
+        const updateDoc = {
+          status: cleanStatus,
+          updatedAt: new Date()
+        };
+
+        // Update ONLY fields that are provided, preserving all others
+        if (notes !== undefined) updateDoc.notes = notes;
+        else if (existing) updateDoc.notes = existing.notes;
+        else updateDoc.notes = '';
+
+        if (guestCount !== undefined) updateDoc.guestCount = Number(guestCount) || 0;
+        else if (existing) updateDoc.guestCount = existing.guestCount;
+        else updateDoc.guestCount = 0;
+
         updated = await Availability.findOneAndUpdate(
           { date },
-          {
-            status: cleanStatus,
-            notes: notes || '',
-            guestCount: Number(guestCount) || 0,
-            updatedAt: new Date()
-          },
+          { $set: updateDoc },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
       } catch (e) {
@@ -116,7 +129,12 @@ const handleSaveDate = async (req, res) => {
     }
 
     // Always update persistent disk store
-    const diskRecord = persistentStore.setAvailability(date, cleanStatus, notes || '', guestCount || 0);
+    const diskRecord = persistentStore.setAvailability(
+      date,
+      cleanStatus,
+      notes !== undefined ? notes : (updated?.notes || ''),
+      guestCount !== undefined ? guestCount : (updated?.guestCount || 0)
+    );
 
     res.json({
       success: true,

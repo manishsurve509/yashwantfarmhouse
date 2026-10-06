@@ -1,5 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import Admin from '../models/Admin.js';
 import { generateToken, authMiddleware } from '../middleware/auth.js';
 import { isDBConnected } from '../config/db.js';
@@ -82,7 +83,25 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const admin = await Admin.findById(req.admin.id).select('-passwordHash');
+    let admin = null;
+    if (isDBConnected()) {
+      try {
+        if (mongoose.Types.ObjectId.isValid(req.admin.id)) {
+          admin = await Admin.findById(req.admin.id).select('-passwordHash');
+        }
+      } catch (e) {
+        console.warn('DB findById failed, falling back to memory store:', e.message);
+      }
+    }
+
+    if (!admin) {
+      const memAdmin = memoryStore.getAdminByEmail(req.admin.email);
+      if (memAdmin) {
+        const { passwordHash, ...safeMemAdmin } = memAdmin;
+        admin = safeMemAdmin;
+      }
+    }
+
     if (!admin) {
       return res.status(404).json({
         success: false,

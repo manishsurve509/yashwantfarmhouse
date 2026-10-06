@@ -184,9 +184,9 @@ class PersistentStore {
             ...parsed,
             admin: { ...getDefaultData().admin, ...(parsed.admin || {}) },
             settings: { ...getDefaultData().settings, ...(parsed.settings || {}) },
-            prices: Array.isArray(parsed.prices) && parsed.prices.length > 0 ? parsed.prices : getDefaultData().prices,
+            prices: Array.isArray(parsed.prices) ? parsed.prices : getDefaultData().prices,
             availability: parsed.availability || {},
-            gallery: Array.isArray(parsed.gallery) && parsed.gallery.length > 0 ? parsed.gallery : getDefaultData().gallery,
+            gallery: Array.isArray(parsed.gallery) ? parsed.gallery : getDefaultData().gallery,
             enquiries: Array.isArray(parsed.enquiries) ? parsed.enquiries : []
           };
         }
@@ -308,10 +308,11 @@ class PersistentStore {
 
   setAvailability(date, status, notes = '', guestCount = 0) {
     if (!this.data.availability) this.data.availability = {};
+    const existing = this.data.availability[date] || {};
     this.data.availability[date] = {
       status,
-      notes: notes || '',
-      guestCount: Number(guestCount) || 0,
+      notes: notes !== undefined && notes !== '' ? notes : (existing.notes || ''),
+      guestCount: guestCount !== undefined && guestCount !== 0 ? Number(guestCount) : (existing.guestCount || 0),
       updatedAt: new Date().toISOString()
     };
     this.save();

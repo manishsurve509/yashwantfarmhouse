@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -19,6 +19,7 @@ export default function AdminAvailability() {
   const { token } = useAuth();
   const { availability, refreshData } = useSiteData();
 
+  const [availabilityMap, setAvailabilityMap] = useState({});
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState('available');
@@ -33,6 +34,24 @@ export default function AdminAvailability() {
 
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  const fetchAvailability = async () => {
+    try {
+      setLoading(true);
+      const res = await safeFetch('/api/availability');
+      if (res.ok && res.data?.success && res.data?.map) {
+        setAvailabilityMap(res.data.map);
+      }
+    } catch (err) {
+      console.error('Error fetching availability:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailability();
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -58,15 +77,21 @@ export default function AdminAvailability() {
   };
 
   const getDateStatus = (dateKey) => {
-    return availability?.[dateKey] || 'available';
+    const item = availabilityMap[dateKey] || availability?.[dateKey];
+    return typeof item === 'string' ? item : (item?.status || 'available');
   };
 
   const handleSelectDay = (dayNum) => {
     const dateKey = formatDateKey(dayNum);
-    const status = getDateStatus(dateKey);
+    const existing = availabilityMap[dateKey] || availability?.[dateKey];
+    const status = typeof existing === 'string' ? existing : (existing?.status || 'available');
+    const existingNotes = typeof existing === 'object' ? (existing?.notes || '') : '';
+    const existingGuests = typeof existing === 'object' ? (existing?.guestCount || 0) : 0;
+
     setSelectedDate(dateKey);
     setSelectedStatus(status);
-    setNotes('');
+    setNotes(existingNotes);
+    setGuestCount(existingGuests);
   };
 
   const showToast = (msg) => {
@@ -98,6 +123,7 @@ export default function AdminAvailability() {
         throw new Error(res.error || res.data?.message || 'Failed to save date status');
       }
 
+      await fetchAvailability();
       await refreshData();
       showToast(`Date ${selectedDate} set to ${selectedStatus}. Public site updated!`);
     } catch (err) {
@@ -120,9 +146,12 @@ export default function AdminAvailability() {
 
       if (!res.ok) throw new Error(res.error || res.data?.message || 'Failed to reset date');
 
+      await fetchAvailability();
       await refreshData();
       if (selectedDate === dateKey) {
         setSelectedStatus('available');
+        setNotes('');
+        setGuestCount(0);
       }
       showToast(`Date ${dateKey} reset to available.`);
     } catch (err) {
@@ -172,6 +201,7 @@ export default function AdminAvailability() {
 
       if (!res.ok || !res.data?.success) throw new Error(res.error || res.data?.message || 'Failed batch update');
 
+      await fetchAvailability();
       await refreshData();
       showToast(`Updated ${datesList.length} dates to ${batchStatus}!`);
       setBatchStart('');
@@ -185,8 +215,13 @@ export default function AdminAvailability() {
   };
 
   // List upcoming non-available dates
-  const markedDates = Object.entries(availability || {})
-    .filter(([_, status]) => status !== 'available')
+  const effectiveMap = Object.keys(availabilityMap).length > 0 ? availabilityMap : (availability || {});
+  const markedDates = Object.entries(effectiveMap)
+    .filter(([_, val]) => {
+      const st = typeof val === 'string' ? val : val?.status;
+      return st && st !== 'available';
+    })
+    .map(([dateKey, val]) => [dateKey, typeof val === 'string' ? val : val?.status])
     .sort(([a], [b]) => a.localeCompare(b));
 
   return (

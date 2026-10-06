@@ -22,13 +22,13 @@ router.get('/data', async (req, res) => {
         const [dbSettings, dbPrices, dbAvailability, dbGallery] = await Promise.all([
           SiteSetting.findOne(),
           Price.find({ active: true }).sort({ order: 1, createdAt: 1 }),
-          Availability.find().select('date status guestCount -_id'),
+          Availability.find().select('date status guestCount notes -_id'),
           Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 })
         ]);
 
         if (dbSettings) settings = dbSettings;
-        if (dbPrices && dbPrices.length > 0) prices = dbPrices;
-        if (dbGallery && dbGallery.length > 0) gallery = dbGallery;
+        if (dbPrices) prices = dbPrices;
+        if (dbGallery) gallery = dbGallery;
 
         if (dbAvailability) {
           dbAvailability.forEach(item => {
@@ -40,10 +40,10 @@ router.get('/data', async (req, res) => {
       }
     }
 
-    // Fallbacks to durable persistent disk store if DB is offline or returned empty
-    if (!settings) settings = persistentStore.getSettings();
-    if (!prices || prices.length === 0) prices = persistentStore.getPrices().filter(p => p.active !== false);
-    if (!gallery || gallery.length === 0) gallery = persistentStore.getGallery();
+    // Only fallback to persistent disk store if MongoDB query failed or is disconnected
+    if (settings === null) settings = persistentStore.getSettings();
+    if (prices === null) prices = persistentStore.getPrices().filter(p => p.active !== false);
+    if (gallery === null) gallery = persistentStore.getGallery();
 
     if (!isDBConnected() && Object.keys(availabilityMap).length === 0) {
       const diskAvail = persistentStore.getAvailability();

@@ -65,16 +65,14 @@ router.get('/', async (req, res) => {
     if (isDBConnected()) {
       try {
         const photos = await Gallery.find().sort({ featured: -1, order: 1, createdAt: -1 });
-        if (photos && photos.length > 0) {
-          // Sync to persistent store
-          persistentStore.data.gallery = photos.map(p => ({
-            ...p.toObject(),
-            _id: p._id.toString()
-          }));
-          persistentStore.save();
+        // Sync to persistent store
+        persistentStore.data.gallery = photos.map(p => ({
+          ...p.toObject(),
+          _id: p._id.toString()
+        }));
+        persistentStore.save();
 
-          return res.json({ success: true, photos });
-        }
+        return res.json({ success: true, photos });
       } catch (e) {
         console.warn('[Gallery API] DB find failed, using persistent store:', e.message);
       }

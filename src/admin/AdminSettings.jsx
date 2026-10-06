@@ -42,24 +42,55 @@ export default function AdminSettings() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await safeFetch('/api/settings');
+        if (res.ok && res.data?.success && res.data?.settings) {
+          const s = res.data.settings;
+          setForm({
+            farmhouseName: s.farmhouseName || '',
+            nameMarathi: s.nameMarathi || '',
+            tagline: s.tagline || '',
+            owner: s.owner || '',
+            phonePrimary: s.phonePrimary || '',
+            phonePrimaryDisplay: s.phonePrimaryDisplay || '',
+            phoneSecondary: s.phoneSecondary || '',
+            phoneSecondaryDisplay: s.phoneSecondaryDisplay || '',
+            whatsappNumber: s.whatsappNumber || '',
+            locationVillage: s.locationVillage || '',
+            locationCity: s.locationCity || '',
+            locationState: s.locationState || '',
+            locationFull: s.locationFull || '',
+            mapsUrl: s.mapsUrl || '',
+            mapsEmbedUrl: s.mapsEmbedUrl || ''
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching settings:', err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
     if (settings) {
-      setForm({
-        farmhouseName: settings.farmhouseName || '',
-        nameMarathi: settings.nameMarathi || '',
-        tagline: settings.tagline || '',
-        owner: settings.owner || '',
-        phonePrimary: settings.phonePrimary || '',
-        phonePrimaryDisplay: settings.phonePrimaryDisplay || '',
-        phoneSecondary: settings.phoneSecondary || '',
-        phoneSecondaryDisplay: settings.phoneSecondaryDisplay || '',
-        whatsappNumber: settings.whatsappNumber || '',
-        locationVillage: settings.locationVillage || '',
-        locationCity: settings.locationCity || '',
-        locationState: settings.locationState || '',
-        locationFull: settings.locationFull || '',
-        mapsUrl: settings.mapsUrl || '',
-        mapsEmbedUrl: settings.mapsEmbedUrl || ''
-      });
+      setForm((prev) => ({
+        farmhouseName: settings.farmhouseName !== undefined ? settings.farmhouseName : prev.farmhouseName,
+        nameMarathi: settings.nameMarathi !== undefined ? settings.nameMarathi : prev.nameMarathi,
+        tagline: settings.tagline !== undefined ? settings.tagline : prev.tagline,
+        owner: settings.owner !== undefined ? settings.owner : prev.owner,
+        phonePrimary: settings.phonePrimary !== undefined ? settings.phonePrimary : prev.phonePrimary,
+        phonePrimaryDisplay: settings.phonePrimaryDisplay !== undefined ? settings.phonePrimaryDisplay : prev.phonePrimaryDisplay,
+        phoneSecondary: settings.phoneSecondary !== undefined ? settings.phoneSecondary : prev.phoneSecondary,
+        phoneSecondaryDisplay: settings.phoneSecondaryDisplay !== undefined ? settings.phoneSecondaryDisplay : prev.phoneSecondaryDisplay,
+        whatsappNumber: settings.whatsappNumber !== undefined ? settings.whatsappNumber : prev.whatsappNumber,
+        locationVillage: settings.locationVillage !== undefined ? settings.locationVillage : prev.locationVillage,
+        locationCity: settings.locationCity !== undefined ? settings.locationCity : prev.locationCity,
+        locationState: settings.locationState !== undefined ? settings.locationState : prev.locationState,
+        locationFull: settings.locationFull !== undefined ? settings.locationFull : prev.locationFull,
+        mapsUrl: settings.mapsUrl !== undefined ? settings.mapsUrl : prev.mapsUrl,
+        mapsEmbedUrl: settings.mapsEmbedUrl !== undefined ? settings.mapsEmbedUrl : prev.mapsEmbedUrl
+      }));
     }
   }, [settings]);
 

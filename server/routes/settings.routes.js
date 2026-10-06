@@ -20,6 +20,7 @@ router.get('/', async (req, res) => {
             _id: settings._id.toString()
           };
           persistentStore.save();
+          return res.json({ success: true, settings });
         }
       } catch (e) {
         console.warn('[Settings API] DB settings find failed, using persistent store:', e.message);

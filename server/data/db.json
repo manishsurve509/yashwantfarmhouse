@@ -5,13 +5,13 @@
     "email": "admin@yashwantfarm.com",
     "passwordHash": "$2b$10$jz.2T4jVfRrMXRFnYZNehuwLX30f3uxsRvv/bG.Hkrb3DoKdg9Lzu",
     "role": "admin",
-    "lastLogin": "2026-10-03T16:46:36.661Z"
+    "lastLogin": "2026-10-06T13:35:45.561Z"
   },
   "settings": {
     "_id": "6abd4a58e806e87abf8a171a",
     "farmhouseName": "Yashwant Farmhouse",
     "nameMarathi": "यशवंत फार्महाऊस",
-    "tagline": "Exclusive private farmhouse stay with sparkling swimming pool in Nandwal, Kolhapur.",
+    "tagline": "A peaceful farmhouse getaway in Nandwal, Kolhapur.",
     "owner": "Pandurang Yashwant Patil",
     "phonePrimary": "+918010042002",
     "phonePrimaryDisplay": "80100 42002",
@@ -26,8 +26,8 @@
     "locationShort": "Nandwal, Kolhapur",
     "mapsUrl": "https://maps.app.goo.gl/N341yLui8hh7EGDp9?g_st=aw",
     "mapsEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3825.5!2d74.22!3d16.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bc055007e08b7b5%3A0x451566f0840fa534!2z4KSv4KS24KS14KSC4KSkIOCkq-CkvuCksOCljeCkruCkueCkvuCkiuCkuA!5e0!3m2!1sen!2sin!4v1695000000000",
+    "updatedAt": "2026-10-06T13:35:38.867Z",
     "createdAt": "2026-09-30T17:43:52.224Z",
-    "updatedAt": "2026-10-03T16:51:01.975Z",
     "__v": 0
   },
   "prices": [
@@ -35,7 +35,7 @@
       "_id": "6abd4a58e806e87abf8a171d",
       "title": "Weekday Stay",
       "category": "Monday - Thursday",
-      "amount": 4500,
+      "amount": 5500,
       "unit": "per night",
       "description": "Peaceful escape for families and friends. Enjoy full private farmhouse access.",
       "features": [
@@ -51,7 +51,7 @@
       "order": 1,
       "__v": 0,
       "createdAt": "2026-09-30T17:43:52.234Z",
-      "updatedAt": "2026-10-03T17:01:06.727Z"
+      "updatedAt": "2026-10-05T15:08:14.194Z"
     },
     {
       "_id": "6abd4a58e806e87abf8a171e",
@@ -293,11 +293,6 @@
       "notes": "",
       "guestCount": 0
     },
-    "2026-11-18": {
-      "status": "available",
-      "notes": "",
-      "guestCount": 0
-    },
     "2026-11-19": {
       "status": "available",
       "notes": "",
@@ -326,12 +321,14 @@
     "2026-11-25": {
       "status": "unavailable",
       "notes": "Pool Maintenance",
-      "guestCount": 0
+      "guestCount": 0,
+      "updatedAt": "2026-10-06T13:35:38.825Z"
     },
     "2026-11-26": {
       "status": "unavailable",
       "notes": "Pool Maintenance",
-      "guestCount": 0
+      "guestCount": 0,
+      "updatedAt": "2026-10-06T13:35:38.825Z"
     },
     "2026-11-27": {
       "status": "available",
@@ -407,6 +404,39 @@
     }
   ],
   "enquiries": [
+    {
+      "_id": "enq-1791293738840-329",
+      "status": "new",
+      "createdAt": "2026-10-06T13:35:38.840Z",
+      "name": "Sachin Patil",
+      "phone": "+919876543210",
+      "email": "sachin@example.com",
+      "preferredDate": "2026-12-15",
+      "guests": "10-15 Guests",
+      "message": "Looking for a 2-night family reunion weekend."
+    },
+    {
+      "_id": "enq-1791293614550-909",
+      "status": "new",
+      "createdAt": "2026-10-06T13:33:34.550Z",
+      "name": "Sachin Patil",
+      "phone": "+919876543210",
+      "email": "sachin@example.com",
+      "preferredDate": "2026-12-15",
+      "guests": "10-15 Guests",
+      "message": "Looking for a 2-night family reunion weekend."
+    },
+    {
+      "_id": "6ac3bdc59909fa76c379a142",
+      "status": "new",
+      "createdAt": "2026-10-05T15:09:57.903Z",
+      "name": "Sachin Patil",
+      "phone": "+919876543210",
+      "email": "sachin@example.com",
+      "preferredDate": "2026-12-15",
+      "guests": "10-15 Guests",
+      "message": "Looking for a 2-night family reunion weekend."
+    },
     {
       "_id": "6ac1327542c4eab9a5113e66",
       "status": "new",
